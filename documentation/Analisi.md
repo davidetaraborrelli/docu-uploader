@@ -215,3 +215,4 @@ La presente sezione descrive i requisiti non funzionali (Non-Functional Requirem
 |--------|-------------------------------|----------|
 | NFR-16 | Scalabilità                   | Il sistema deve poter scalare orizzontalmente almeno a livello di microservizi. |
 | NFR-17 | Prestazioni                   | La ricerca semantica deve restituire risultati in tempi compatibili con l’utilizzo web. |
+
