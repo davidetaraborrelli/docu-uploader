@@ -1,0 +1,19 @@
+spring:
+  rabbitmq:
+    host: localhost
+    port: 5672
+
+jwt:
+  secret: test-secret-key-che-deve-essere-lunga-almeno-256-bit-per-hmac-sha
+  expiration-ms: 86400000
+
+services:
+  ollama:
+    base-url: http://localhost:11434
+    model: nomic-embed-text
+  qdrant:
+    base-url: http://localhost:6333
+    collection-name: documents-test
+    vector-size: 768
+  document:
+    base-url: http://localhost:8082

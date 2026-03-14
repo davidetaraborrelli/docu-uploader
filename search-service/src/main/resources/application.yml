@@ -1,0 +1,33 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: search-service
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: docuupload
+    password: docuupload
+
+jwt:
+  secret: docu-upload-super-secret-key-che-deve-essere-lunga-almeno-256-bit-ok
+  expiration-ms: 86400000
+
+services:
+  ollama:
+    base-url: http://localhost:11434
+    model: nomic-embed-text
+  qdrant:
+    base-url: http://localhost:6333
+    collection-name: documents
+    vector-size: 768
+  document:
+    base-url: http://localhost:8082
+
+influxdb:
+  enabled: true
+  url: http://localhost:8086
+  token: docuupload-influxdb-token
+  org: docuupload
+  bucket: performance

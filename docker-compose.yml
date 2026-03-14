@@ -1,0 +1,235 @@
+services:
+
+  postgres:
+    image: postgres:16
+    container_name: docuupload-postgres
+    environment:
+      POSTGRES_USER: docuupload
+      POSTGRES_PASSWORD: docuupload
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docuupload"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: docuupload-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@docuupload.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    volumes:
+      - ./docker/pgadmin-servers.json:/pgadmin4/servers.json
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  mongodb:
+    image: mongo:7
+    container_name: docuupload-mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: docuupload
+      MONGO_INITDB_ROOT_PASSWORD: docuupload
+      MONGO_INITDB_DATABASE: db_documents
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: docuupload-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: docuupload
+      RABBITMQ_DEFAULT_PASS: docuupload
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  user-service:
+    build:
+      context: .
+      dockerfile: user-service/Dockerfile
+    container_name: docuupload-user-service
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/db_users
+      SPRING_DATASOURCE_USERNAME: docuupload
+      SPRING_DATASOURCE_PASSWORD: docuupload
+      JWT_SECRET: docu-upload-super-secret-key-che-deve-essere-lunga-almeno-256-bit-ok
+      INFLUXDB_URL: http://influxdb:8086
+      INFLUXDB_TOKEN: docuupload-influxdb-token
+      INFLUXDB_ORG: docuupload
+      INFLUXDB_BUCKET: performance
+      INFLUXDB_ENABLED: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      influxdb:
+        condition: service_healthy
+
+  document-service:
+    build:
+      context: .
+      dockerfile: document-service/Dockerfile
+    container_name: docuupload-document-service
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/db_documents
+      SPRING_DATASOURCE_USERNAME: docuupload
+      SPRING_DATASOURCE_PASSWORD: docuupload
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_USERNAME: docuupload
+      SPRING_RABBITMQ_PASSWORD: docuupload
+      SPRING_DATA_MONGODB_URI: mongodb://docuupload:docuupload@mongodb:27017/db_documents?authSource=admin
+      JWT_SECRET: docu-upload-super-secret-key-che-deve-essere-lunga-almeno-256-bit-ok
+      INFLUXDB_URL: http://influxdb:8086
+      INFLUXDB_TOKEN: docuupload-influxdb-token
+      INFLUXDB_ORG: docuupload
+      INFLUXDB_BUCKET: performance
+      INFLUXDB_ENABLED: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      influxdb:
+        condition: service_healthy
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: notification-service/Dockerfile
+    container_name: docuupload-notification-service
+    ports:
+      - "8083:8083"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/db_notifications
+      SPRING_DATASOURCE_USERNAME: docuupload
+      SPRING_DATASOURCE_PASSWORD: docuupload
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_USERNAME: docuupload
+      SPRING_RABBITMQ_PASSWORD: docuupload
+      JWT_SECRET: docu-upload-super-secret-key-che-deve-essere-lunga-almeno-256-bit-ok
+      INFLUXDB_URL: http://influxdb:8086
+      INFLUXDB_TOKEN: docuupload-influxdb-token
+      INFLUXDB_ORG: docuupload
+      INFLUXDB_BUCKET: performance
+      INFLUXDB_ENABLED: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      influxdb:
+        condition: service_healthy
+
+  influxdb:
+    image: influxdb:2.7
+    container_name: docuupload-influxdb
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: docuupload
+      DOCKER_INFLUXDB_INIT_PASSWORD: docuupload123
+      DOCKER_INFLUXDB_INIT_ORG: docuupload
+      DOCKER_INFLUXDB_INIT_BUCKET: performance
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: docuupload-influxdb-token
+    ports:
+      - "8086:8086"
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  qdrant:
+    image: qdrant/qdrant:v1.12.1
+    container_name: docuupload-qdrant
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/localhost/6333' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: docuupload-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+      - ./docker/ollama-init.sh:/ollama-init.sh
+    entrypoint: ["/bin/bash", "/ollama-init.sh"]
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/localhost/11434' || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+
+  search-service:
+    build:
+      context: .
+      dockerfile: search-service/Dockerfile
+    container_name: docuupload-search-service
+    ports:
+      - "8084:8084"
+    environment:
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_USERNAME: docuupload
+      SPRING_RABBITMQ_PASSWORD: docuupload
+      JWT_SECRET: docu-upload-super-secret-key-che-deve-essere-lunga-almeno-256-bit-ok
+      SERVICES_OLLAMA_BASE_URL: http://ollama:11434
+      SERVICES_OLLAMA_MODEL: nomic-embed-text
+      SERVICES_QDRANT_BASE_URL: http://qdrant:6333
+      SERVICES_QDRANT_COLLECTION_NAME: documents
+      SERVICES_QDRANT_VECTOR_SIZE: 768
+      SERVICES_DOCUMENT_BASE_URL: http://document-service:8082
+      INFLUXDB_URL: http://influxdb:8086
+      INFLUXDB_TOKEN: docuupload-influxdb-token
+      INFLUXDB_ORG: docuupload
+      INFLUXDB_BUCKET: performance
+      INFLUXDB_ENABLED: true
+    depends_on:
+      influxdb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+  mongodb-data:
+  qdrant-data:
+  ollama-data:
+  influxdb-data:

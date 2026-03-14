@@ -1,0 +1,28 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: user-service
+  datasource:
+    url: jdbc:postgresql://localhost:5434/db_users
+    username: docuupload
+    password: docuupload
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+jwt:
+  secret: docu-upload-super-secret-key-che-deve-essere-lunga-almeno-256-bit-ok
+  expiration-ms: 86400000
+
+influxdb:
+  enabled: true
+  url: http://localhost:8086
+  token: docuupload-influxdb-token
+  org: docuupload
+  bucket: performance
