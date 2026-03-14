@@ -21,6 +21,7 @@ Thumbs.db
 *.log
 
 # Internal docs
+documentation/piano.md
 
 # Claude Code
 .claude/
