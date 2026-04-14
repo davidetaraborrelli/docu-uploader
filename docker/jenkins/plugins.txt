@@ -1,0 +1,6 @@
+workflow-aggregator
+git
+blueocean
+junit
+docker-workflow
+configuration-as-code
