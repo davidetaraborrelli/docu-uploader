@@ -1,21 +1,19 @@
 import { useNavigate } from "react-router-dom"
+
+import { logout } from "../services/api"
 import { Button } from "./ui/button"
 
 export default function Navbar() {
-
   const navigate = useNavigate()
 
   const handleLogout = () => {
-    localStorage.removeItem("token")
+    logout()
     navigate("/")
   }
 
   return (
-
     <div className="border-b">
-
       <div className="max-w-5xl mx-auto flex items-center justify-between p-4">
-
         <h1
           className="text-xl font-bold cursor-pointer"
           onClick={() => navigate("/dashboard")}
@@ -24,19 +22,11 @@ export default function Navbar() {
         </h1>
 
         <div className="flex gap-2">
-
           <Button
             variant="ghost"
             onClick={() => navigate("/dashboard")}
           >
             Dashboard
-          </Button>
-
-          <Button
-            variant="ghost"
-            onClick={() => navigate("/upload")}
-          >
-            Upload
           </Button>
 
           <Button
@@ -52,11 +42,8 @@ export default function Navbar() {
           >
             Logout
           </Button>
-
         </div>
-
       </div>
-
     </div>
   )
 }

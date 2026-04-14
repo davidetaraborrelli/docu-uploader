@@ -1,125 +1,202 @@
-import type { Document, LoginResponse } from "../types/types"
+import type {
+  CurrentUser,
+  Document,
+  LoginResponse,
+  Notification,
+  SearchDocument,
+  SearchResponse,
+} from "../types/types"
 
-// 🔹 MOCK DATABASE
-let documents: Document[] = [
-  {
-    id: "1",
-    filename: "documento1.txt",
-    uploadDate: "2026-03-05",
-    status: "Indicizzato",
-    content: "Questo è il contenuto del documento 1."
-  },
-  {
-    id: "2",
-    filename: "report.txt",
-    uploadDate: "2026-03-04",
-    status: "In elaborazione",
-    content: "Questo è il contenuto del report."
+const BASE_URL = "/api"
+
+type ApiDocument = {
+  id: number
+  title: string
+  content: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+function getToken(): string | null {
+  return localStorage.getItem("token")
+}
+
+function getAuthHeaders(): HeadersInit {
+  const token = getToken()
+
+  return {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
   }
-]
+}
 
-/* =========================
-   AUTH
-========================= */
+async function getErrorMessage(response: Response, fallbackMessage: string) {
+  try {
+    const data = await response.json()
 
-export async function login(
+    if (typeof data?.error === "string") {
+      return data.error
+    }
+  } catch {
+    // Ignore invalid JSON and use fallback below.
+  }
+
+  return fallbackMessage
+}
+
+function mapDocument(document: ApiDocument): Document {
+  return {
+    id: document.id,
+    title: document.title,
+    content: document.content ?? "",
+    createdAt: document.createdAt,
+    updatedAt: document.updatedAt,
+  }
+}
+
+export async function login(username: string, password: string): Promise<LoginResponse> {
+  const response = await fetch(`${BASE_URL}/auth/login`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ username, password }),
+  })
+
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response, "Login fallito"))
+  }
+
+  const data = (await response.json()) as LoginResponse
+  localStorage.setItem("token", data.token)
+
+  return data
+}
+
+export async function register(
+  username: string,
   email: string,
-  password: string
+  password: string,
 ): Promise<LoginResponse> {
+  const response = await fetch(`${BASE_URL}/auth/register`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ username, email, password }),
+  })
 
-  await new Promise((resolve) => setTimeout(resolve, 500))
-
-  if (email === "test@test.com" && password === "daje") {
-    return { token: "fake-jwt-token" }
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response, "Registrazione fallita"))
   }
 
-  throw new Error("Credenziali non valide")
+  return response.json()
 }
 
-/* =========================
-   DOCUMENTS
-========================= */
+export async function getCurrentUser(): Promise<CurrentUser> {
+  const response = await fetch(`${BASE_URL}/users/me`, {
+    headers: getAuthHeaders(),
+  })
 
-// 🔹 tutti i documenti
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response, "Errore recupero utente"))
+  }
+
+  return response.json()
+}
+
 export async function getDocuments(): Promise<Document[]> {
+  const response = await fetch(`${BASE_URL}/documents`, {
+    headers: getAuthHeaders(),
+  })
 
-  await new Promise((resolve) => setTimeout(resolve, 300))
-
-  return documents
-}
-
-// 🔹 singolo documento
-export async function getDocument(id: string): Promise<Document | undefined> {
-
-  await new Promise((resolve) => setTimeout(resolve, 200))
-
-  return documents.find((doc) => doc.id === id)
-}
-
-// 🔹 upload
-export async function uploadDocument(file: File): Promise<Document> {
-
-  await new Promise((resolve) => setTimeout(resolve, 500))
-
-  let content = ""
-
-  // solo txt leggibile
-  if (file.type === "text/plain") {
-    content = await file.text()
-  } else {
-    content = "Anteprima non disponibile per questo tipo di file"
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response, "Errore caricamento documenti"))
   }
 
-  const newDocument: Document = {
-    id: Date.now().toString(),
-    filename: file.name,
-    uploadDate: new Date().toISOString().split("T")[0],
-    status: "In elaborazione",
-    content
-  }
-
-  documents.push(newDocument)
-
-  return newDocument
+  const data = (await response.json()) as ApiDocument[]
+  return data.map(mapDocument)
 }
 
-// 🔹 modifica contenuto
-export async function updateDocument(
-  id: string,
-  content: string
-): Promise<void> {
+export async function getDocument(id: number): Promise<Document> {
+  const response = await fetch(`${BASE_URL}/documents/${id}`, {
+    headers: getAuthHeaders(),
+  })
 
-  await new Promise((resolve) => setTimeout(resolve, 300))
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response, "Documento non trovato"))
+  }
 
-  const doc = documents.find((d) => d.id === id)
+  const data = (await response.json()) as ApiDocument
+  return mapDocument(data)
+}
 
-  if (doc) {
-    doc.content = content
+export async function uploadDocument(title: string, content: string): Promise<Document> {
+  const response = await fetch(`${BASE_URL}/documents`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({
+      title,
+      content,
+    }),
+  })
+
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response, "Errore upload documento"))
+  }
+
+  const data = (await response.json()) as ApiDocument
+  return mapDocument(data)
+}
+
+export async function deleteDocument(id: number): Promise<void> {
+  const response = await fetch(`${BASE_URL}/documents/${id}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  })
+
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response, "Errore eliminazione documento"))
   }
 }
 
-// 🔹 elimina
-export async function deleteDocument(id: string): Promise<void> {
+export async function searchDocuments(query: string, limit = 10): Promise<SearchDocument[]> {
+  const params = new URLSearchParams({
+    q: query,
+    limit: String(limit),
+  })
 
-  await new Promise((resolve) => setTimeout(resolve, 300))
+  const response = await fetch(`${BASE_URL}/search?${params.toString()}`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+  })
 
-  documents = documents.filter((doc) => doc.id !== id)
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response, "Errore nella ricerca"))
+  }
+
+  const data = (await response.json()) as SearchResponse
+
+  return data.results.map((result) => ({
+    id: result.documentId,
+    title: result.title,
+    score: result.score,
+    userId: result.userId,
+  }))
 }
 
-/* =========================
-   SEARCH
-========================= */
+export async function getNotifications(): Promise<Notification[]> {
+  const response = await fetch(`${BASE_URL}/notifications`, {
+    headers: getAuthHeaders(),
+  })
 
-export async function searchDocuments(query: string): Promise<Document[]> {
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response, "Errore caricamento notifiche"))
+  }
 
-  await new Promise((resolve) => setTimeout(resolve, 300))
+  return response.json()
+}
 
-  if (!query) return []
-
-  const lowerQuery = query.toLowerCase()
-
-  return documents.filter((doc) =>
-    doc.filename.toLowerCase().includes(lowerQuery) ||
-    doc.content.toLowerCase().includes(lowerQuery)
-  )
+export function logout() {
+  localStorage.removeItem("token")
 }
